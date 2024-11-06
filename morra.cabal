@@ -61,7 +61,7 @@ executable morra
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    -- other-modules:
+    other-modules:    Ngram
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -69,6 +69,8 @@ executable morra
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.17.2.1
                     , transformers
+                    , containers
+                    , random
 
     -- Directories containing source files.
     hs-source-dirs:   app
