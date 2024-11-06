@@ -41,26 +41,15 @@ incOccurence event ng@NGram { nCount = n, window = w, statistics = m }
           occ = occurence event ng
        in ng { statistics = M.insert pattern (occ + 1) m }
 
-eventChance :: Ord a => a -> NGram a -> Probability
-eventChance event NGram {window = w, nCount = n, statistics = m} =
-  let 
-      -- Filter patterns that match the current window
-      matchingPatterns = M.keys $ M.filterWithKey (\k _ -> take (length w) k == w) m
-      sumOfMatches = fromIntegral $ length matchingPatterns
-
-      -- Occurrence count for the specific pattern [event : window]
-      occ = fromIntegral $ M.findWithDefault 0 (event : w) m
-
-      -- Calculate E^(N-1) for free occurrences
-      numEvents = length . M.keysSet . M.mapKeys head $ m
-      freeOccurrences = fromIntegral $ numEvents ^ (n - 1)
-
-      -- Calculate the probability with smoothing
-  in (occ + 1) / (sumOfMatches + freeOccurrences)
+chanceOf :: Ord a => a -> NGram a -> Probability
+chanceOf event NGram {window = w, events = e, statistics = m} =
+  let matchingPatterns = M.filterWithKey (\k _ -> take (length w) k == w) m
+      sumOfMatches =     fromIntegral $ sum matchingPatterns
+      occ =              fromIntegral $ M.findWithDefault 0 (event : w) m
+  in (occ + 1) / (sumOfMatches + fromIntegral e)
 
 update :: Ord a => a -> NGram a -> NGram a
-update event = 
-  windowItem event . incOccurence event 
+update event = windowItem event . incOccurence event 
 
 data RPP = Rock | Paper | Scissors deriving (Eq, Ord, Show)
 
@@ -75,6 +64,6 @@ test = do
 
   print ng
   putStrLn "Predictions"
-  putStrLn $ "Rock: " ++ show (eventChance Rock ng)
-  putStrLn $ "Paper: " ++ show (eventChance Paper ng)
-  putStrLn $ "Scissors: " ++ show (eventChance Scissors ng)
+  putStrLn $ "Rock: " ++ show (chanceOf Rock ng)
+  putStrLn $ "Paper: " ++ show (chanceOf Paper ng)
+  putStrLn $ "Scissors: " ++ show (chanceOf Scissors ng)
