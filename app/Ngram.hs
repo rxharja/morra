@@ -30,26 +30,51 @@ occurence event (NGram {window = w, statistics = m }) =
   fromMaybe 0 (M.lookup (event:w) m)
 
 windowItem :: a -> NGram a -> NGram a
-windowItem a ng@NGram{ window = w, nCount = n } = ng { window = a : shiftedWindow }
-  where
-    windowLen = length w
-    shiftedWindow = if windowLen >= (n - 1)
-                    then take (windowLen - 1) w
-                    else w
+windowItem a ng@NGram{ window = w, nCount = n } = 
+  ng { window = take (n - 1) (a : w) }
 
 incOccurence :: Ord a => a -> NGram a -> NGram a 
-incOccurence event ng@NGram { window = w, nCount = n, statistics = m } = 
-  let t = length w - (n - 1)
-      pattern = event : w
-      occ = occurence event ng
-   in if t < 0 
-      then ng 
-      else ng { statistics = M.insert pattern (occ + 1) m }
+incOccurence event ng@NGram { nCount = n, window = w, statistics = m } 
+ | length (event:w) < n = ng
+ | otherwise = 
+      let pattern = event : w
+          occ = occurence event ng
+       in ng { statistics = M.insert pattern (occ + 1) m }
 
-update :: Ord a => a -> NGram a -> NGram a 
-update event = incOccurence event . windowItem event
+eventChance :: Ord a => a -> NGram a -> Probability
+eventChance event NGram {window = w, nCount = n, statistics = m} =
+  let 
+      -- Filter patterns that match the current window
+      matchingPatterns = M.keys $ M.filterWithKey (\k _ -> take (length w) k == w) m
+      sumOfMatches = fromIntegral $ length matchingPatterns
 
-eventChance :: Ord a => [a] -> NGram a -> Probability
-eventChance event (NGram {events = e, nCount = n, statistics = m}) =
-  let occ = fromMaybe 0 (M.lookup event m)
-   in fromIntegral occ / (fromIntegral n^e)
+      -- Occurrence count for the specific pattern [event : window]
+      occ = fromIntegral $ M.findWithDefault 0 (event : w) m
+
+      -- Calculate E^(N-1) for free occurrences
+      numEvents = length . M.keysSet . M.mapKeys head $ m
+      freeOccurrences = fromIntegral $ numEvents ^ (n - 1)
+
+      -- Calculate the probability with smoothing
+  in (occ + 1) / (sumOfMatches + freeOccurrences)
+
+update :: Ord a => a -> NGram a -> NGram a
+update event = 
+  windowItem event . incOccurence event 
+
+data RPP = Rock | Paper | Scissors deriving (Eq, Ord, Show)
+
+test :: IO ()
+test = do
+  let ng = update Paper
+         . update Rock
+         . update Paper
+         . update Rock
+         . update Paper
+         . update Rock $ ngram 3 3
+
+  print ng
+  putStrLn "Predictions"
+  putStrLn $ "Rock: " ++ show (eventChance Rock ng)
+  putStrLn $ "Paper: " ++ show (eventChance Paper ng)
+  putStrLn $ "Scissors: " ++ show (eventChance Scissors ng)
