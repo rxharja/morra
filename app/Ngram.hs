@@ -43,27 +43,9 @@ incOccurence event ng@NGram { nCount = n, window = w, statistics = m }
 
 chanceOf :: Ord a => a -> NGram a -> Probability
 chanceOf event NGram {window = w, events = e, statistics = m} =
-  let matchingPatterns = M.filterWithKey (\k _ -> take (length w) k == w) m
-      sumOfMatches =     fromIntegral $ sum matchingPatterns
-      occ =              fromIntegral $ M.findWithDefault 0 (event : w) m
+  let sumOfMatches = fromIntegral . sum . M.filterWithKey (\k _ -> take (length w) k == w) $ m
+      occ =          fromIntegral . M.findWithDefault 0 (event : w) $ m
   in (occ + 1) / (sumOfMatches + fromIntegral e)
 
 update :: Ord a => a -> NGram a -> NGram a
 update event = windowItem event . incOccurence event 
-
-data RPP = Rock | Paper | Scissors deriving (Eq, Ord, Show)
-
-test :: IO ()
-test = do
-  let ng = update Paper
-         . update Rock
-         . update Paper
-         . update Rock
-         . update Paper
-         . update Rock $ ngram 3 3
-
-  print ng
-  putStrLn "Predictions"
-  putStrLn $ "Rock: " ++ show (chanceOf Rock ng)
-  putStrLn $ "Paper: " ++ show (chanceOf Paper ng)
-  putStrLn $ "Scissors: " ++ show (chanceOf Scissors ng)
