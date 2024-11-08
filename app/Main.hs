@@ -4,6 +4,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State.Lazy
 import System.Random
 import Ngram
+import System.IO
 
 type Score = Int
 
@@ -39,8 +40,7 @@ toInt One = 1
 toInt Two = 2
 
 sumHands :: Hand -> Hand -> Parity
-sumHands p1Hand p2Hand =
-  if even (toInt p1Hand + toInt p2Hand) then Even else Odd
+sumHands p1Hand p2Hand = if even (toInt p1Hand + toInt p2Hand) then Even else Odd
 
 askGameMode :: IO GameType
 askGameMode = do
@@ -74,15 +74,13 @@ getHumanThrow = do
     _ -> putStrLn "\nPlease choose either 1 or 2 fingers." >> getHumanThrow
 
 getP2Throw :: Settings -> IO Hand
-getP2Throw Settings { gameType = TwoPlayer } = getHumanThrow
-getP2Throw Settings { gameType = CPU ng, playerParity = parity }= do
-  let next' = predictNext ng 
-  putStrLn $ "\nPredicted: " ++ show next' ++ " with a chance of " ++ show (chanceOf next' ng)
-  return $ case (next', parity) of 
-         (One, Odd) -> One
-         (One, Even) -> Two
-         (Two, Odd) -> Two
-         (Two, Even) -> One
+getP2Throw Settings { gameType = TwoPlayer } = getHumanThrow 
+getP2Throw Settings { gameType = CPU ng, playerParity = parity }= 
+  return $ case (predictNext ng, parity) of 
+           (One, Odd) -> One
+           (One, Even) -> Two
+           (Two, Odd) -> Two
+           (Two, Even) -> One
 
 throwHands :: Settings -> IO (Hand, Parity)
 throwHands sets = do
@@ -96,36 +94,41 @@ throwHands sets = do
 
   return (p1Throw, sumHands p1Throw p2Throw)
 
+showScore :: (Show a1, Show a2) => a1 -> a2 -> IO ()
+showScore s1 s2 = putStrLn $ "\ncurrent scores: P1: " ++ show s1 ++ " P2:  " ++ show s2
+
 updateScore :: Game Hand
 updateScore = do
   gs@GameState{ settings = sets, p1Score = s1, p2Score = s2 } <- get
 
-  (hand, parity) <- liftIO $ throwHands sets
+  (p1Hand, parity) <- liftIO $ throwHands sets
 
-  let newGs = 
-        if playerParity sets == parity 
-        then gs { p1Score = s1 + 1 }
-        else gs { p2Score = s2 + 1 }
+  let p1Win = playerParity sets == parity 
 
-  put newGs
+  liftIO . putStrLn $ if p1Win then "\nPlayer 1 wins!" else "\nPlayer 2 wins!"
 
-  return hand
+  put $ if p1Win then gs { p1Score = s1 + 1 } else gs { p2Score = s2 + 1 }
+
+  return p1Hand
   
 updateNGram :: Hand -> Game ()
-updateNGram hand = do 
+updateNGram p1Hand = do 
   gs@GameState{ settings = sets@Settings { gameType = gametype } } <- get 
 
-  case gametype of  
-    TwoPlayer -> put gs
-    CPU ng -> do
-      let ng' = update hand ng
-      put gs { settings = sets { gameType = CPU ng' } }
+  put $ case gametype of  
+        TwoPlayer -> gs
+        CPU ng -> gs { settings = sets { gameType = CPU (update p1Hand ng) } }
 
 runGame :: Game ()
 runGame = do
-  GameState { p1Score = s1, p2Score = p2 } <- get
-  liftIO $ putStrLn $ "\ncurrent scores: P1: " ++ show s1 ++ " P2:  " ++ show p2
+  GameState { p1Score = s1, p2Score = s2 } <- get
+
+  liftIO $ showScore s1 s2
+
   updateScore >>= updateNGram >> runGame
 
 main :: IO ()
-main = setupGame >>= runStateT runGame >> return ()
+main = do
+  hSetBuffering stdout NoBuffering
+  hSetBuffering stdin NoBuffering
+  setupGame >>= runStateT runGame >> return ()
