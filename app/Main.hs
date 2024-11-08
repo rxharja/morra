@@ -3,18 +3,19 @@ module Main where
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State.Lazy
 import System.Random
+import Ngram
 
 type Score = Int
 
-data GameType = CPU | TwoPlayer deriving (Show, Enum)
-
-data Parity = Odd | Even deriving (Show, Enum, Eq)
-
-data Hand = One | Two deriving (Enum)
+data Hand = One | Two deriving (Eq, Ord, Enum, Bounded)
 
 instance Show Hand where
   show One = "1"
   show Two = "2"
+
+data GameType = CPU (NGram Hand) | TwoPlayer deriving Show
+
+data Parity = Odd | Even deriving (Show, Enum, Eq)
 
 data Settings = Settings { gameType :: GameType, playerParity :: Parity }
 
@@ -46,7 +47,7 @@ askGameMode = do
   putStrLn "1. Computer Game\n2. Human"
   x <- getChar
   case x of 
-    '1' -> return CPU
+    '1' -> return (CPU $ ngram 2 3)
     '2' -> return TwoPlayer
     _ -> putStrLn "Choose 1 or 2." >> askGameMode
   
@@ -72,34 +73,36 @@ getHumanThrow = do
     2 -> return Two
     _ -> putStrLn "\nPlease choose either 1 or 2 fingers." >> getHumanThrow
 
-getP2Throw :: GameType -> IO Hand
-getP2Throw TwoPlayer = getHumanThrow
-getP2Throw CPU = randomOfTwo One Two
+getP2Throw :: Settings -> IO Hand
+getP2Throw Settings { gameType = TwoPlayer } = getHumanThrow
+getP2Throw Settings { gameType = CPU ng, playerParity = parity }= 
+  case (predictNext ng, parity) of 
+   (One, Odd) -> return One
+   (One, Even) -> return Two
+   (Two, Odd) -> return Two
+   (Two, Even) -> return One
 
-throwHands :: GameType -> IO Parity
-throwHands gametype = do
+throwHands :: Settings -> IO Parity
+throwHands sets = do
   putStrLn "\nChoose either 1 or 2 fingers." 
 
   putStr "P1: "
   p1Throw <- getHumanThrow 
 
-  p2Throw <- getP2Throw gametype
+  p2Throw <- getP2Throw sets
   putStr $ "\nP2: " ++ show p2Throw
 
   return $ sumHands p1Throw p2Throw
 
 runGame :: Game ()
 runGame = do
-  game@(GameState { settings = Settings { gameType = type', 
-                                          playerParity = pParity }, 
-                    p1Score = s1, 
-                    p2Score = p2 }) <- get
+  game@(GameState { settings = sets, p1Score = s1, p2Score = p2 }) <- get
 
   liftIO $ putStrLn $ "\ncurrent scores: P1: " ++ show s1 ++ " P2:  " ++ show p2
-  parity <- liftIO $ throwHands type'
+  parity <- liftIO $ throwHands sets
 
   let newGameState = 
-        if pParity == parity 
+        if playerParity sets == parity 
         then game { p1Score = s1 + 1 }
         else game { p2Score = p2 + 1 }
 
