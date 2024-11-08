@@ -38,10 +38,9 @@ windowItem a ng@NGram{ window = w, nCount = n } =
 incOccurence :: Ord a => a -> NGram a -> NGram a 
 incOccurence event ng@NGram { nCount = n, window = w, statistics = m } 
  | length (event:w) < n = ng
- | otherwise = 
-      let pattern = event : w
-          occ = occurence event ng
-       in ng { statistics = M.insert pattern (occ + 1) m }
+ | otherwise = let pattern = event : w
+                   occ = occurence event ng
+                in ng { statistics = M.insert pattern (occ + 1) m }
 
 chanceOf :: Ord a => a -> NGram a -> Probability
 chanceOf event NGram {window = w, events = e, statistics = m} =
@@ -52,10 +51,7 @@ chanceOf event NGram {window = w, events = e, statistics = m} =
 update :: Ord a => a -> NGram a -> NGram a
 update event = windowItem event . incOccurence event 
 
-allValues :: (Bounded a, Enum a) => [a]
-allValues = [minBound .. maxBound]
-
 predictNext :: (Bounded a, Ord a, Enum a) => NGram a -> a
 predictNext ng = 
-  let xs = (\val -> (val, chanceOf val ng)) <$> allValues
+  let xs = (\val -> (val, chanceOf val ng)) <$> [minBound .. maxBound]
    in fst . maximumBy (compare `on` snd) $ xs

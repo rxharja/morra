@@ -6,6 +6,7 @@ import System.Random ( randomRIO )
 import Ngram ( NGram, ngram, update, predictNext )
 import System.IO ( hSetBuffering, hSetEcho, stdin, stdout, BufferMode(NoBuffering) )
 import Control.Monad (when)
+import Text.Read (readMaybe)
 
 type Score = Int
 
@@ -71,10 +72,10 @@ setupGame = do
 ---------- Input ---------- 
 getHumanThrow :: IO Hand
 getHumanThrow = do 
-  x <- read <$> fmap (:[]) getChar 
-  case (x :: Int) of 
-    1 -> return One
-    2 -> return Two
+  x <- readMaybe <$> fmap pure getChar :: IO (Maybe Int)
+  case x of 
+    Just 1 -> return One
+    Just 2 -> return Two
     _ -> putStrLn "\nPlease choose either 1 or 2 fingers." >> getHumanThrow
 
 getP2Throw :: Settings -> IO Hand
