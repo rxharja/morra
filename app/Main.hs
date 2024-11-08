@@ -76,7 +76,7 @@ getHumanThrow = do
   case x of 
     Just 1 -> return One
     Just 2 -> return Two
-    _ -> putStrLn "\nPlease choose either 1 or 2 fingers." >> getHumanThrow
+    _ -> putStr "\nPlease choose either 1 or 2 fingers: " >> getHumanThrow
 
 getP2Throw :: Settings -> IO Hand
 getP2Throw Settings { gameType = TwoPlayer } = getHumanThrow 
