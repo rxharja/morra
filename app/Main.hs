@@ -5,16 +5,13 @@ import Control.Monad.Trans.State.Lazy
 import System.Random
 import Ngram
 import System.IO
+import Control.Monad (when)
 
 type Score = Int
 
 data Hand = One | Two deriving (Eq, Ord, Enum, Bounded)
 
-instance Show Hand where
-  show One = "1"
-  show Two = "2"
-
-data GameType = CPU (NGram Hand) | TwoPlayer deriving Show
+data GameType = CPU (NGram Hand) | TwoPlayer deriving (Show)
 
 data Parity = Odd | Even deriving (Show, Enum, Eq)
 
@@ -25,6 +22,14 @@ data GameState = GameState { settings :: Settings
                            , p2Score  :: Score }
 
 type Game = StateT GameState IO
+
+instance Show Hand where
+  show One = "1"
+  show Two = "2"
+
+isTwoPlayer :: GameType -> Bool
+isTwoPlayer TwoPlayer = True
+isTwoPlayer (CPU _) = False
 
 randomOfTwo :: a -> a -> IO a
 randomOfTwo choice1 choice2 = do
@@ -84,13 +89,18 @@ getP2Throw Settings { gameType = CPU ng, playerParity = parity }=
 
 throwHands :: Settings -> IO (Hand, Parity)
 throwHands sets = do
-  putStrLn "\nChoose either 1 or 2 fingers." 
+  hSetEcho stdin False
 
-  putStr "P1: "
+  putStr "Player 1 - Enter either 1 or 2: "
   p1Throw <- getHumanThrow 
 
+  when (isTwoPlayer $ gameType sets) $ 
+    putStr "\nPlayer 2 - Enter either 1 or 2: "
+
   p2Throw <- getP2Throw sets
-  putStr $ "\nP2: " ++ show p2Throw
+
+  putStrLn $ "\nP1: " ++ show p1Throw ++ "\nP2: " ++ show p2Throw
+  hSetEcho stdin True
 
   return (p1Throw, sumHands p1Throw p2Throw)
 
@@ -130,5 +140,5 @@ runGame = do
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-  hSetBuffering stdin NoBuffering
+  hSetBuffering stdin  NoBuffering
   setupGame >>= runStateT runGame >> return ()
