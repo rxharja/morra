@@ -22,7 +22,6 @@ data NGram a =
         , nCount :: N
         , window :: [a]
         , statistics :: RecordedEvents a }
-  deriving Show
 
 ngram :: Events -> N -> NGram a
 ngram e n = NGram { events = e, nCount = n, window = [], statistics = M.empty }

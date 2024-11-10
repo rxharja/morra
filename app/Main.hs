@@ -2,77 +2,14 @@ module Main where
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State.Lazy ( evalStateT, get, modify, put, StateT )
-import System.Random ( randomRIO )
-import Ngram ( NGram, ngram, update, predictNext )
+import Ngram ( NGram, ngram, predictNext )
 import System.IO ( hSetBuffering, hSetEcho, stdin, stdout, BufferMode(NoBuffering) )
 import Control.Monad (when)
 import Text.Read (readMaybe)
-
-type Score = Int
-
-data Hand = One | Two deriving (Eq, Ord, Enum, Bounded)
-
-data GameType = CPU (NGram Hand) | TwoPlayer deriving (Show)
-
-data Parity = Odd | Even deriving (Show, Enum, Eq)
-
-data Settings = Settings { gameType :: GameType, playerParity :: Parity }
-
-data GameState = GameState { settings :: Settings, p1Score  :: Score, p2Score  :: Score }
+import GameState
+import System.Random (randomRIO)
 
 type Game = StateT GameState IO
-
-instance Show Hand where
-  show One = "1"
-  show Two = "2"
-
----------- Utilities ---------- 
-isTwoPlayer :: GameType -> Bool
-isTwoPlayer TwoPlayer = True
-isTwoPlayer (CPU _) = False
-
-randomOfTwo :: a -> a -> IO a
-randomOfTwo choice1 choice2 = do
-  choice <- randomRIO (0 :: Int, 1)
-  pure $ if choice == 0 then choice1 else choice2
-
-oppositeParity :: Parity -> Parity
-oppositeParity Odd = Even
-oppositeParity Even = Odd
-
-toInt :: Hand -> Integer
-toInt One = 1
-toInt Two = 2
-
-sumHands :: Hand -> Hand -> Parity
-sumHands p1Hand p2Hand = if even (toInt p1Hand + toInt p2Hand) then Even else Odd
-
-initialState :: Settings -> GameState
-initialState sets = GameState { settings = sets, p1Score = 0, p2Score = 0 }
-
-updateGameType :: Hand -> GameType -> GameType
-updateGameType p1Hand (CPU ng) = CPU (update p1Hand ng)
-updateGameType _ gt = gt
-
-winningHand :: Hand -> Parity -> Hand
-winningHand One Odd = One
-winningHand One Even = Two
-winningHand Two Odd = Two
-winningHand Two Even = One
-
-congratulate :: Bool -> String
-congratulate p1Win = if p1Win then "\nPlayer 1 wins!" else "\nPlayer 2 wins!"
-
-incScore :: GameState -> Bool -> GameState
-incScore gs p1Win = if p1Win 
-  then gs { p1Score = p1Score gs + 1 } 
-  else gs { p2Score = p2Score gs + 1 }
-
-showParity :: Parity -> String
-showParity p = "\nPlayer 1 is " ++ show p ++ " and player 2 is " ++ show (oppositeParity p)
-
-showScore :: Score -> Score -> String
-showScore s1 s2 = "\ncurrent scores: P1: " ++ show s1 ++ " P2:  " ++ show s2
 
 ---------- Set Up ---------- 
 askGameMode :: IO GameType
@@ -87,14 +24,26 @@ askGameMode = do
 setupSettings :: IO Settings
 setupSettings = do
   gameMode <- askGameMode
-  parity <- randomOfTwo Odd Even
+  parity <- randomRIO (Odd, Even)
   putStrLn (showParity parity)
   pure Settings { gameType = gameMode, playerParity = parity }
 
 setupGame :: IO GameState
 setupGame = initialState <$> setupSettings
 
----------- Input ---------- 
+---------- IO ---------- 
+setBuffering :: IO ()
+setBuffering = do
+  hSetBuffering stdout NoBuffering
+  hSetBuffering stdin  NoBuffering
+
+withNoEcho :: IO a -> IO a
+withNoEcho action = do
+  hSetEcho stdin False
+  result <- action
+  hSetEcho stdin True
+  return result
+
 liftPrint :: String -> Game ()
 liftPrint = liftIO . putStrLn
 
@@ -115,43 +64,36 @@ getP2Throw Settings { gameType = CPU ng, playerParity = p } = pure $ getCpuThrow
 
 ---------- Core ---------- 
 throwHands :: Settings -> IO (Hand, Parity)
-throwHands sets = do
-  hSetEcho stdin False
-  putStr "Player 1 - Enter either 1 or 2: "
-  p1Throw <- getHumanThrow
+throwHands s@Settings {gameType = gt} = do
+  p1Throw <- withNoEcho $ do
+    putStr "Player 1 - Enter either 1 or 2: "
+    getHumanThrow
 
-  when (isTwoPlayer $ gameType sets) $
-    putStr "\nPlayer 2 - Enter either 1 or 2: "
+  p2Throw <- withNoEcho $ do
+    when (isTwoPlayer gt) $ putStr "\nPlayer 2 - Enter either 1 or 2: "
+    getP2Throw s
 
-  p2Throw <- getP2Throw sets
   putStrLn $ "\nP1: " ++ show p1Throw ++ "\nP2: " ++ show p2Throw
-  hSetEcho stdin True
-
   return (p1Throw, sumHands p1Throw p2Throw)
 
 updateScore :: Game Hand
 updateScore = do
-  gs@GameState{ settings = sets } <- get
-  (p1Hand, parity) <- liftIO $ throwHands sets
-  let p1Win = playerParity sets == parity
+  gs@GameState{ settings = s } <- get
+  (p1Hand, parity) <- liftIO $ throwHands s
+  let p1Win = playerParity s == parity
   liftPrint $ congratulate p1Win
   put (incScore gs p1Win)
   pure p1Hand
 
 updateNGram :: Hand -> Game ()
-updateNGram p1Hand = modify $ \gs@GameState { settings = sets } -> 
-  gs { settings = sets { gameType = updateGameType p1Hand (gameType sets) } }
+updateNGram p1Hand = modify $ \gs@GameState { settings = s@Settings{gameType = gt} } -> 
+  gs { settings = s { gameType = updateGameType p1Hand gt } }
 
 runGame :: Game ()
 runGame = do
   GameState { p1Score = s1, p2Score = s2 } <- get
   liftPrint $ showScore s1 s2
   updateScore >>= updateNGram >> runGame
-
-setBuffering :: IO ()
-setBuffering = do
-  hSetBuffering stdout NoBuffering
-  hSetBuffering stdin  NoBuffering
 
 main :: IO ()
 main = setBuffering >> setupGame >>= evalStateT runGame
