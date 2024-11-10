@@ -46,7 +46,7 @@ withNoEcho action = do
 
 humanThrow :: IO Hand
 humanThrow =
-  maybe (putStr "\nSelect either 1 or 2: " >> humanThrow) pure . (toHand <=< readMaybe) . pure =<< getChar
+  maybe (humanThrow <* putStr "\nChoose 1 or 2: ") pure . (toHand <=< readMaybe) . pure =<< getChar
 
 cpuThrow :: NGram Hand -> Parity -> Hand
 cpuThrow ng = winningHand (predictNext ng)
@@ -57,9 +57,9 @@ getP2Throw Settings { gameType = CPU ng, playerParity = p } = pure $ cpuThrow ng
 
 throwHands :: Settings -> IO (Hand, Parity)
 throwHands s@Settings {gameType = gt} = do
-  p1Throw <- withNoEcho $ putStr "Player 1 - Enter either 1 or 2: " >> humanThrow
+  p1Throw <- withNoEcho $ putStr "Player 1 - Choose 1 or 2: " >> humanThrow
   p2Throw <- withNoEcho $ 
-    when (isTwoPlayer gt) (putStr "\nPlayer 2 - Enter either 1 or 2: ") >> getP2Throw s
+    when (isTwoPlayer gt) (putStr "\nPlayer 2 - Choose 1 or 2: ") >> getP2Throw s
 
   putStrLn $ "\nP1: " ++ show p1Throw ++ "\nP2: " ++ show p2Throw
   return (p1Throw, sumHands p1Throw p2Throw)
