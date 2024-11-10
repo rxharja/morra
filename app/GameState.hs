@@ -36,8 +36,16 @@ toInt :: Hand -> Integer
 toInt One = 1
 toInt Two = 2
 
+toHand :: Integer -> Maybe Hand
+toHand 1 = Just One
+toHand 2 = Just Two
+toHand _ = Nothing
+
 sumHands :: Hand -> Hand -> Parity
 sumHands p1Hand p2Hand = if even (toInt p1Hand + toInt p2Hand) then Even else Odd
+
+player1Wins :: Settings -> Parity -> Bool
+player1Wins s parity = playerParity s == parity
 
 initialState :: Settings -> GameState
 initialState sets = GameState { settings = sets, p1Score = 0, p2Score = 0 }
