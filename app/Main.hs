@@ -15,19 +15,22 @@ type Game = StateT GameState IO
 setBuffering :: IO ()
 setBuffering = hSetBuffering stdout NoBuffering >> hSetBuffering stdin NoBuffering
 
+handTrigram :: NGram Hand
+handTrigram = ngram 2 3 
+
 askGameMode :: IO GameType
 askGameMode = do
   putStrLn "1. Computer Game\n2. Human"
   x <- getChar
   case x of
-    '1' -> return (CPU $ ngram 2 3)
+    '1' -> return (CPU handTrigram)
     '2' -> return TwoPlayer
     _ -> putStrLn "Choose 1 or 2." >> askGameMode
 
 setupSettings :: IO Settings
 setupSettings = do
   sets <- Settings <$> askGameMode <*> randomRIO (Odd, Even)
-  putStrLn (showParity . playerParity $ sets)
+  putStrLn . showParity . playerParity $ sets
   pure sets
 
 setupGame :: IO GameState
